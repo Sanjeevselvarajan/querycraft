@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>QueryCraft — SQL-generator</title>
+<title>QueryCraft — SQL Generator</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -1053,6 +1053,9 @@
   ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
   ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
 
+
+  
+
   /* Responsive */
   @media (max-width: 768px) {
     main { grid-template-columns: 1fr; height: auto; }
@@ -1741,6 +1744,7 @@ CRITICAL: The "sql" field must contain ONLY raw SQL text — no HTML tags, no <s
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-api-key': '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',
           'anthropic-version': '2023-06-01',
           'anthropic-dangerous-direct-browser-access': 'true'
         },
@@ -1873,17 +1877,36 @@ CRITICAL: The "sql" field must contain ONLY raw SQL text — no HTML tags, no <s
 
     history.forEach((item, i) => {
       const el = document.createElement('div');
-      el.className = 'history-item';
+      el.className = 'history-item' + (item.saved ? ' saved' : '');
       el.innerHTML = `
-        <div class="history-nl">${item.nl}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <div class="history-nl" style="margin:0;flex:1">${item.nl}</div>
+          ${item.saved ? '<span class="history-saved-badge">CLOUD</span>' : ''}
+        </div>
         <div class="history-meta">
           <span class="history-dialect">${item.dialect}</span>
-          <span>${item.ts}</span>
+          <span>${item.date || ''} ${item.ts}</span>
         </div>
       `;
       el.onclick = () => {
         lastSQL = item.sql;
-        showToast('Loaded from history');
+        // Show the SQL in the output panel
+        const wrap = document.getElementById('sqlOutputWrap');
+        const emptyState = document.getElementById('emptyState');
+        if (emptyState) emptyState.remove();
+        const block = document.createElement('div');
+        block.className = 'sql-block';
+        block.innerHTML = '<div class="sql-block-header"><div class="sql-block-label"><div class="sql-dot"></div>' + item.dialect + ' QUERY (from history)</div><div class="sql-actions"><button class="icon-btn" onclick="copySQL()">COPY</button><button class="icon-btn" onclick="downloadSQL()">DOWNLOAD</button></div></div><pre class="sql-code">' + highlightSQL(item.sql) + '</pre>';
+        wrap.appendChild(block);
+        if (item.explanation) {
+          const expBlock = document.createElement('div');
+          expBlock.className = 'explanation-block';
+          expBlock.innerHTML = '<h4>What this query does</h4>' + item.explanation;
+          wrap.appendChild(expBlock);
+        }
+        wrap.scrollTop = wrap.scrollHeight;
+        switchTab('sql', document.querySelector('.tab'));
+        showToast('✓ Loaded from history');
       };
       area.appendChild(el);
     });
@@ -1934,6 +1957,7 @@ CRITICAL: The "sql" field must contain ONLY raw SQL text — no HTML tags, no <s
       showToast('Download failed: ' + e.message);
     }
   }
+
 </script>
 </body>
 </html>
