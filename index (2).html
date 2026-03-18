@@ -1,0 +1,1963 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QueryCraft — SQL Generator</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0c0f;
+    --surface: #111318;
+    --surface2: #181c23;
+    --border: #1f2530;
+    --border2: #2a3040;
+    --accent: #00e5a0;
+    --accent2: #00b87a;
+    --accent-dim: rgba(0,229,160,0.08);
+    --accent-glow: rgba(0,229,160,0.15);
+    --text: #e8eaf0;
+    --text2: #8892a4;
+    --text3: #4a5568;
+    --error: #ff5f6d;
+    --warn: #ffb347;
+    --keyword: #7eb6ff;
+    --string: #a8d8a8;
+    --number: #ffcb6b;
+    --func: #c792ea;
+    --mono: 'Space Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+    --radius: 10px;
+    --radius-lg: 16px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.35;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Glow orb */
+  body::after {
+    content: '';
+    position: fixed;
+    top: -200px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(0,229,160,0.06) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Header */
+  header {
+    position: relative;
+    z-index: 10;
+    padding: 20px 32px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(10,12,15,0.8);
+    backdrop-filter: blur(12px);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .logo-icon {
+    width: 34px;
+    height: 34px;
+    background: var(--accent);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 700;
+    color: #000;
+  }
+
+  .logo-text {
+    font-family: var(--mono);
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.5px;
+  }
+
+  .logo-text span { color: var(--accent); }
+
+  .header-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .badge {
+    font-size: 11px;
+    font-family: var(--mono);
+    padding: 3px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--border2);
+    color: var(--text2);
+    letter-spacing: 0.5px;
+  }
+
+  /* Guide button */
+  .guide-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 1px solid var(--border2);
+    background: transparent;
+    color: var(--text2);
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.18s;
+    margin-left: 4px;
+    flex-shrink: 0;
+  }
+  .guide-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-dim);
+    transform: scale(1.08);
+  }
+
+  /* Guide Modal Overlay */
+  .guide-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.72);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(6px);
+    padding: 20px;
+  }
+  .guide-overlay.open { display: flex; }
+
+  .guide-modal {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 20px;
+    width: 100%;
+    max-width: 720px;
+    max-height: 88vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: guideIn 0.22s cubic-bezier(0.16,1,0.3,1);
+  }
+
+  @keyframes guideIn {
+    from { opacity: 0; transform: translateY(24px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0)    scale(1); }
+  }
+
+  .guide-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    background: var(--surface2);
+  }
+
+  .guide-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .guide-header-icon {
+    width: 38px;
+    height: 38px;
+    background: var(--accent-dim);
+    border: 1px solid rgba(0,229,160,0.25);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+  }
+
+  .guide-header h2 {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.3px;
+  }
+
+  .guide-header p {
+    font-size: 12px;
+    color: var(--text2);
+    margin-top: 2px;
+  }
+
+  .guide-close {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    border: 1px solid var(--border2);
+    background: transparent;
+    color: var(--text2);
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    line-height: 1;
+  }
+  .guide-close:hover { border-color: var(--error); color: var(--error); }
+
+  /* Guide nav tabs */
+  .guide-nav {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+    flex-shrink: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .guide-nav::-webkit-scrollbar { display: none; }
+
+  .guide-tab {
+    padding: 10px 16px;
+    font-size: 11px;
+    font-family: var(--mono);
+    letter-spacing: 0.8px;
+    color: var(--text2);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    white-space: nowrap;
+    text-transform: uppercase;
+  }
+  .guide-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .guide-tab:hover:not(.active) { color: var(--text); }
+
+  /* Guide body */
+  .guide-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+  }
+
+  .guide-section { display: none; }
+  .guide-section.active { display: block; }
+
+  /* Step cards */
+  .step-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .step-card {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    padding: 16px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    transition: border-color 0.15s;
+  }
+  .step-card:hover { border-color: var(--border2); }
+
+  .step-num {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: var(--accent-dim);
+    border: 1px solid rgba(0,229,160,0.2);
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .step-content h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .step-content p {
+    font-size: 13px;
+    color: var(--text2);
+    line-height: 1.6;
+  }
+
+  .step-tag {
+    font-size: 10px;
+    font-family: var(--mono);
+    padding: 2px 7px;
+    border-radius: 4px;
+    letter-spacing: 0.5px;
+  }
+  .step-tag.basic { background: rgba(0,229,160,0.1); color: var(--accent); border: 1px solid rgba(0,229,160,0.2); }
+  .step-tag.pro { background: rgba(199,146,234,0.1); color: var(--func); border: 1px solid rgba(199,146,234,0.2); }
+  .step-tag.tip { background: rgba(255,203,107,0.08); color: var(--number); border: 1px solid rgba(255,203,107,0.2); }
+
+  /* Code snippet inside guide */
+  .guide-code {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--string);
+    margin-top: 8px;
+    line-height: 1.7;
+    white-space: pre;
+    overflow-x: auto;
+  }
+
+  /* Feature grid */
+  .feature-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .feature-card {
+    padding: 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+
+  .feature-card .feat-icon {
+    font-size: 20px;
+    margin-bottom: 8px;
+    display: block;
+  }
+
+  .feature-card h4 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  .feature-card p {
+    font-size: 12px;
+    color: var(--text2);
+    line-height: 1.5;
+  }
+
+  /* Shortcut table */
+  .shortcut-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .shortcut-table tr { border-bottom: 1px solid var(--border); }
+  .shortcut-table tr:last-child { border-bottom: none; }
+  .shortcut-table td {
+    padding: 10px 12px;
+    font-size: 13px;
+    color: var(--text2);
+  }
+  .shortcut-table td:first-child {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    white-space: nowrap;
+    padding-right: 20px;
+  }
+
+  .guide-section-title {
+    font-size: 11px;
+    font-family: var(--mono);
+    letter-spacing: 1.5px;
+    color: var(--text3);
+    text-transform: uppercase;
+    margin-bottom: 14px;
+    margin-top: 4px;
+  }
+
+  .guide-divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 20px 0;
+  }
+
+  .tip-box {
+    background: rgba(255,203,107,0.05);
+    border: 1px solid rgba(255,203,107,0.15);
+    border-radius: 10px;
+    padding: 14px;
+    margin-top: 14px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .tip-box .tip-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+  .tip-box p { font-size: 13px; color: var(--text2); line-height: 1.6; }
+  .tip-box strong { color: var(--number); }
+
+  /* Main layout */
+  main {
+    position: relative;
+    z-index: 1;
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    height: calc(100vh - 73px);
+  }
+
+  /* Left panel */
+  .left-panel {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  /* Section headers */
+  .section-header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface);
+  }
+
+  .section-title {
+    font-size: 11px;
+    font-family: var(--mono);
+    letter-spacing: 1.5px;
+    color: var(--text2);
+    text-transform: uppercase;
+  }
+
+  .section-actions {
+    display: flex;
+    gap: 6px;
+  }
+
+  /* Query input area */
+  .query-area {
+    flex: 1;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow-y: auto;
+  }
+
+  /* Dialect selector */
+  .dialect-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .dialect-btn {
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border2);
+    background: transparent;
+    color: var(--text2);
+    font-family: var(--mono);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.5px;
+  }
+
+  .dialect-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .dialect-btn.active {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+    color: var(--accent);
+  }
+
+  /* Schema input */
+  .schema-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .schema-toggle input[type="checkbox"] {
+    appearance: none;
+    width: 32px;
+    height: 18px;
+    background: var(--border2);
+    border-radius: 9px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .schema-toggle input[type="checkbox"]:checked {
+    background: var(--accent);
+  }
+
+  .schema-toggle input[type="checkbox"]::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.2s;
+  }
+
+  .schema-toggle input[type="checkbox"]:checked::after {
+    transform: translateX(14px);
+  }
+
+  .schema-toggle label {
+    font-size: 13px;
+    color: var(--text2);
+    cursor: pointer;
+  }
+
+  .schema-box {
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .schema-box.visible { display: flex; }
+
+  textarea {
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 12px;
+    resize: vertical;
+    min-height: 100px;
+    outline: none;
+    transition: border-color 0.15s;
+    line-height: 1.6;
+  }
+
+  textarea:focus { border-color: var(--accent); }
+  textarea::placeholder { color: var(--text3); }
+
+  /* Chat area */
+  .chat-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .chat-bubble {
+    max-width: 88%;
+    padding: 10px 14px;
+    border-radius: var(--radius);
+    font-size: 14px;
+    line-height: 1.5;
+    animation: slideIn 0.2s ease;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .chat-bubble.user {
+    align-self: flex-end;
+    background: var(--accent-dim);
+    border: 1px solid rgba(0,229,160,0.2);
+    color: var(--text);
+  }
+
+  .chat-bubble.system {
+    align-self: flex-start;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    color: var(--text2);
+    font-size: 13px;
+  }
+
+  /* Input bar */
+  .input-bar {
+    padding: 16px 24px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+  }
+
+  .input-wrapper {
+    flex: 1;
+    position: relative;
+  }
+
+  .nl-input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    padding: 12px 16px;
+    outline: none;
+    resize: none;
+    min-height: 48px;
+    max-height: 120px;
+    transition: border-color 0.15s;
+    line-height: 1.5;
+  }
+
+  .nl-input:focus { border-color: var(--accent); }
+  .nl-input::placeholder { color: var(--text3); }
+
+  .generate-btn {
+    padding: 12px 22px;
+    background: var(--accent);
+    border: none;
+    border-radius: var(--radius);
+    color: #000;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+    height: 48px;
+  }
+
+  .generate-btn:hover {
+    background: var(--accent2);
+    transform: translateY(-1px);
+  }
+
+  .generate-btn:active { transform: translateY(0); }
+  .generate-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  /* Right panel */
+  .right-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .output-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .tab {
+    padding: 14px 20px;
+    font-size: 11px;
+    font-family: var(--mono);
+    letter-spacing: 1px;
+    color: var(--text2);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    text-transform: uppercase;
+  }
+
+  .tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  .tab:hover:not(.active) { color: var(--text); }
+
+  .output-area {
+    flex: 1;
+    overflow: hidden;
+    display: none;
+    flex-direction: column;
+  }
+
+  .output-area.visible { display: flex; }
+
+  /* SQL output */
+  .sql-output-wrap {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .sql-block {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    animation: slideIn 0.25s ease;
+  }
+
+  .sql-block-header {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface2);
+  }
+
+  .sql-block-label {
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--accent);
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .sql-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .sql-actions {
+    display: flex;
+    gap: 6px;
+  }
+
+  .icon-btn {
+    padding: 5px 10px;
+    background: transparent;
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    color: var(--text2);
+    font-family: var(--mono);
+    font-size: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.5px;
+  }
+
+  .icon-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  pre.sql-code {
+    padding: 20px;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.8;
+    overflow-x: auto;
+    white-space: pre;
+    tab-size: 2;
+  }
+
+  /* SQL syntax highlighting */
+  .kw { color: var(--keyword); font-weight: 700; }
+  .str { color: var(--string); }
+  .num { color: var(--number); }
+  .fn { color: var(--func); }
+  .cm { color: var(--text3); font-style: italic; }
+  .op { color: var(--accent); }
+
+  /* Explanation */
+  .explanation-block {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--text2);
+    animation: slideIn 0.25s ease;
+  }
+
+  .explanation-block h4 {
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--accent);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  /* Breakdown tab */
+  .breakdown-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .clause-item {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    padding: 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    animation: slideIn 0.25s ease;
+  }
+
+  .clause-tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    white-space: nowrap;
+    letter-spacing: 0.5px;
+    min-width: 72px;
+    text-align: center;
+  }
+
+  .clause-tag.select { background: rgba(126,182,255,0.12); color: var(--keyword); border: 1px solid rgba(126,182,255,0.2); }
+  .clause-tag.from   { background: rgba(0,229,160,0.08); color: var(--accent); border: 1px solid rgba(0,229,160,0.2); }
+  .clause-tag.where  { background: rgba(255,203,107,0.08); color: var(--number); border: 1px solid rgba(255,203,107,0.2); }
+  .clause-tag.join   { background: rgba(199,146,234,0.1); color: var(--func); border: 1px solid rgba(199,146,234,0.2); }
+  .clause-tag.order  { background: rgba(255,95,109,0.08); color: var(--error); border: 1px solid rgba(255,95,109,0.2); }
+  .clause-tag.group  { background: rgba(168,216,168,0.1); color: var(--string); border: 1px solid rgba(168,216,168,0.2); }
+  .clause-tag.limit  { background: rgba(74,85,104,0.3); color: var(--text2); border: 1px solid var(--border2); }
+
+  .clause-content { flex: 1; }
+  .clause-label { font-size: 12px; font-family: var(--mono); color: var(--text); margin-bottom: 4px; }
+  .clause-desc { font-size: 13px; color: var(--text2); line-height: 1.5; }
+
+  /* History tab */
+  .history-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .history-item {
+    padding: 12px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+
+  .history-item:hover { border-color: var(--accent); }
+
+  .history-nl {
+    font-size: 13px;
+    color: var(--text);
+    margin-bottom: 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .history-meta {
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--text3);
+    display: flex;
+    gap: 10px;
+  }
+
+  .history-dialect {
+    color: var(--accent);
+  }
+
+  /* Empty state */
+  .empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    color: var(--text3);
+    padding: 40px;
+  }
+
+  .empty-icon {
+    width: 56px;
+    height: 56px;
+    border: 1px solid var(--border2);
+    border-radius: var(--radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 22px;
+    color: var(--text3);
+  }
+
+  .empty-state p {
+    font-size: 14px;
+    text-align: center;
+    line-height: 1.6;
+  }
+
+  .empty-state .hint {
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--text3);
+    text-align: center;
+  }
+
+  /* Examples */
+  .examples-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .example-chip {
+    padding: 6px 12px;
+    border: 1px solid var(--border2);
+    border-radius: 20px;
+    font-size: 12px;
+    color: var(--text2);
+    cursor: pointer;
+    transition: all 0.15s;
+    background: transparent;
+  }
+
+  .example-chip:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-dim);
+  }
+
+  /* Spinner */
+  .spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-state {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px;
+    color: var(--text2);
+    font-size: 13px;
+    font-family: var(--mono);
+  }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--surface2);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 10px 16px;
+    font-size: 13px;
+    font-family: var(--mono);
+    color: var(--accent);
+    z-index: 1000;
+    animation: toastIn 0.2s ease;
+    display: none;
+  }
+
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+
+
+  
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    main { grid-template-columns: 1fr; height: auto; }
+    .left-panel { min-height: 60vh; border-right: none; border-bottom: 1px solid var(--border); }
+    .right-panel { min-height: 60vh; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">Q/</div>
+    <div class="logo-text">Query<span>Craft</span></div>
+  </div>
+  <div class="header-meta">
+    <div class="badge">AI-POWERED</div>
+    <div class="badge">SQL GENERATOR</div>
+    <button class="guide-btn" onclick="openGuide()" title="User Manual">?</button>
+  </div>
+</header>
+
+<!-- Guide Modal -->
+<div class="guide-overlay" id="guideOverlay" onclick="closeGuideOnBg(event)">
+  <div class="guide-modal">
+    <div class="guide-header">
+      <div class="guide-header-left">
+        <div class="guide-header-icon">📖</div>
+        <div>
+          <h2>QueryCraft User Manual</h2>
+          <p>Everything from basic queries to advanced pro techniques</p>
+        </div>
+      </div>
+      <button class="guide-close" onclick="closeGuide()">✕</button>
+    </div>
+
+    <div class="guide-nav">
+      <div class="guide-tab active" onclick="switchGuideTab('quickstart', this)">Quick Start</div>
+      <div class="guide-tab" onclick="switchGuideTab('dialect', this)">Dialects</div>
+      <div class="guide-tab" onclick="switchGuideTab('schema', this)">Schema</div>
+      <div class="guide-tab" onclick="switchGuideTab('queries', this)">Writing Queries</div>
+      <div class="guide-tab" onclick="switchGuideTab('output', this)">Output & Tools</div>
+      <div class="guide-tab" onclick="switchGuideTab('pro', this)">Pro Tips</div>
+      <div class="guide-tab" onclick="switchGuideTab('shortcuts', this)">Shortcuts</div>
+    </div>
+
+    <div class="guide-body">
+
+      <!-- QUICK START -->
+      <div class="guide-section active" id="gs-quickstart">
+        <div class="guide-section-title">Step-by-step workflow</div>
+        <div class="step-list">
+          <div class="step-card">
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <h4>Select your SQL dialect <span class="step-tag basic">BASIC</span></h4>
+              <p>At the top of the left panel, choose the database engine you are targeting — PostgreSQL, MySQL, SQLite, SQL Server, Microsoft SQL Server, or Oracle. The generated query will use the exact syntax, functions, and date formats for that engine. You can switch dialects any time before generating.</p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <h4>Paste your schema (optional but recommended) <span class="step-tag basic">BASIC</span></h4>
+              <p>Toggle on <strong style="color:var(--accent)">Schema Context</strong> and paste your <code style="font-family:var(--mono);color:var(--string);font-size:12px">CREATE TABLE</code> statements. This lets the AI use your exact table and column names instead of guessing them. Without a schema, the AI will still work but may invent plausible-sounding names.</p>
+              <div class="guide-code">CREATE TABLE orders (
+  id INT PRIMARY KEY,
+  user_id INT,
+  total DECIMAL(10,2),
+  status VARCHAR(20),
+  created_at TIMESTAMP
+);</div>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-num">3</div>
+            <div class="step-content">
+              <h4>Type what you want in plain English <span class="step-tag basic">BASIC</span></h4>
+              <p>In the conversation box at the bottom, describe the data you need naturally. You do not need to know any SQL. For example: <em style="color:var(--text)">"Show me all orders placed last month where the total is over 500, sorted by newest first."</em></p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-num">4</div>
+            <div class="step-content">
+              <h4>Press RUN or hit Enter <span class="step-tag basic">BASIC</span></h4>
+              <p>Click the <strong style="color:var(--accent)">RUN →</strong> button or press <code style="font-family:var(--mono);color:var(--string);font-size:12px">Enter</code> (use Shift+Enter for a new line). The generated SQL appears in the right panel with syntax highlighting, an explanation, and a clause-by-clause breakdown.</p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-num">5</div>
+            <div class="step-content">
+              <h4>Refine with follow-up messages <span class="step-tag pro">PRO</span></h4>
+              <p>The conversation remembers context. After generating, you can say things like <em style="color:var(--text)">"also group it by region"</em> or <em style="color:var(--text)">"add a filter for active users only"</em> — the AI will build on the previous query. No need to repeat yourself.</p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-num">6</div>
+            <div class="step-content">
+              <h4>Copy or download the result <span class="step-tag basic">BASIC</span></h4>
+              <p>In the SQL Output panel, use the <strong style="color:var(--accent)">COPY</strong> button to copy to clipboard or <strong style="color:var(--accent)">DOWNLOAD</strong> to save as a <code style="font-family:var(--mono);color:var(--string);font-size:12px">.sql</code> file. Your query history is saved in the History tab for the session.</p>
+            </div>
+          </div>
+        </div>
+        <div class="tip-box">
+          <div class="tip-icon">💡</div>
+          <p><strong>First time?</strong> Use the Quick Example chips in the left panel — click any chip to pre-fill the input and see how the tool works without having to think of a query.</p>
+        </div>
+      </div>
+
+      <!-- DIALECTS -->
+      <div class="guide-section" id="gs-dialect">
+        <div class="guide-section-title">Supported database engines</div>
+        <div class="step-list">
+          <div class="step-card">
+            <div class="step-num" style="background:rgba(126,182,255,0.1);border-color:rgba(126,182,255,0.2);color:var(--keyword)">PG</div>
+            <div class="step-content">
+              <h4>PostgreSQL</h4>
+              <p>Full support for CTEs (<code style="font-family:var(--mono);color:var(--string);font-size:12px">WITH</code>), window functions (<code style="font-family:var(--mono);color:var(--string);font-size:12px">OVER PARTITION BY</code>), <code style="font-family:var(--mono);color:var(--string);font-size:12px">ILIKE</code>, <code style="font-family:var(--mono);color:var(--string);font-size:12px">RETURNING</code>, array types, and JSONB operators. Best choice for modern relational workloads.</p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-num" style="background:rgba(255,203,107,0.08);border-color:rgba(255,203,107,0.2);color:var(--number)">MY</div>
+            <div class="step-content">
+              <h4>MySQL</h4>
+              <p>Uses <code style="font-family:var(--mono);color:var(--string);font-size:12px">LIMIT/OFFSET</code>, backtick identifiers, <code style="font-family:var(--mono);color:var(--string);font-size:12px">NOW()</code>, and MySQL-specific string functions like <code style="font-family:var(--mono);color:var(--string);font-size:12px">GROUP_CONCAT</code>. Generates compatible syntax for MySQL 8+.</p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-num" style="background:rgba(0,229,160,0.06);border-color:rgba(0,229,160,0.15);color:var(--accent)">SL</div>
+            <div class="step-content">
+              <h4>SQLite</h4>
+              <p>Lightweight syntax, no stored procedures. Uses <code style="font-family:var(--mono);color:var(--string);font-size:12px">strftime()</code> for date formatting. Good for embedded apps, mobile, and local development.</p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-num" style="background:rgba(199,146,234,0.08);border-color:rgba(199,146,234,0.2);color:var(--func)">SS</div>
+            <div class="step-content">
+              <h4>SQL Server</h4>
+              <p>Generates T-SQL with <code style="font-family:var(--mono);color:var(--string);font-size:12px">TOP N</code> instead of LIMIT, uses <code style="font-family:var(--mono);color:var(--string);font-size:12px">GETDATE()</code>, bracket identifiers <code style="font-family:var(--mono);color:var(--string);font-size:12px">[column]</code>, and supports <code style="font-family:var(--mono);color:var(--string);font-size:12px">OFFSET FETCH</code> for pagination.</p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-num" style="background:rgba(0,120,212,0.12);border-color:rgba(0,120,212,0.25);color:#4da6ff">MS</div>
+            <div class="step-content">
+              <h4>Microsoft SQL Server (MSSQL) <span class="step-tag pro">PRO</span></h4>
+              <p>Full T-SQL dialect — <code style="font-family:var(--mono);color:var(--string);font-size:12px">SELECT TOP</code>, <code style="font-family:var(--mono);color:var(--string);font-size:12px">NOLOCK</code> hints, <code style="font-family:var(--mono);color:var(--string);font-size:12px">TRY_CAST</code>, <code style="font-family:var(--mono);color:var(--string);font-size:12px">STRING_AGG</code>, <code style="font-family:var(--mono);color:var(--string);font-size:12px">DATEFROMPARTS</code>, and SSMS-compatible formatting. Use this for Azure SQL and on-premise MSSQL environments.</p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-num" style="background:rgba(255,95,109,0.08);border-color:rgba(255,95,109,0.2);color:var(--error)">OR</div>
+            <div class="step-content">
+              <h4>Oracle</h4>
+              <p>Uses <code style="font-family:var(--mono);color:var(--string);font-size:12px">ROWNUM</code> / <code style="font-family:var(--mono);color:var(--string);font-size:12px">FETCH FIRST N ROWS ONLY</code>, <code style="font-family:var(--mono);color:var(--string);font-size:12px">SYSDATE</code>, dual table selects, and Oracle-specific functions like <code style="font-family:var(--mono);color:var(--string);font-size:12px">NVL</code> and <code style="font-family:var(--mono);color:var(--string);font-size:12px">DECODE</code>.</p>
+            </div>
+          </div>
+        </div>
+        <div class="tip-box">
+          <div class="tip-icon">⚡</div>
+          <p><strong>Switching dialects mid-session:</strong> You can change the dialect at any time. The next query you generate will use the new dialect. However, the conversation history still refers to old queries — so for a fully clean slate in a new dialect, refresh the page.</p>
+        </div>
+      </div>
+
+      <!-- SCHEMA -->
+      <div class="guide-section" id="gs-schema">
+        <div class="guide-section-title">How to use schema context</div>
+        <div class="step-list">
+          <div class="step-card">
+            <div class="step-num">①</div>
+            <div class="step-content">
+              <h4>Toggle Schema Context on <span class="step-tag basic">BASIC</span></h4>
+              <p>Click the <strong style="color:var(--accent)">Schema Context</strong> toggle switch in the Configuration panel. A text area will expand below it.</p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-num">②</div>
+            <div class="step-content">
+              <h4>Paste your CREATE TABLE statements <span class="step-tag basic">BASIC</span></h4>
+              <p>Copy your table definitions from your database client (pgAdmin, DBeaver, MySQL Workbench, SSMS, etc.) and paste them in. You can paste multiple tables — the AI reads all of them.</p>
+              <div class="guide-code">CREATE TABLE users (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  email VARCHAR(200) UNIQUE,
+  role VARCHAR(20) DEFAULT 'user',
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE orders (
+  id SERIAL PRIMARY KEY,
+  user_id INT REFERENCES users(id),
+  total DECIMAL(10,2),
+  status VARCHAR(20),
+  placed_at TIMESTAMP
+);</div>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-num">③</div>
+            <div class="step-content">
+              <h4>What happens with your schema <span class="step-tag basic">BASIC</span></h4>
+              <p>The AI will use your exact table names, column names, types, and relationships. It will also correctly infer join conditions (e.g. <code style="font-family:var(--mono);color:var(--string);font-size:12px">orders.user_id = users.id</code>) without you needing to specify them.</p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-num">④</div>
+            <div class="step-content">
+              <h4>No schema mode <span class="step-tag tip">TIP</span></h4>
+              <p>If you leave Schema Context off, the AI works in best-effort mode. It will generate SQL using common, sensible table and column names based on your description. These may need light editing to match your real schema. Warnings will be shown in yellow when assumptions are made.</p>
+            </div>
+          </div>
+        </div>
+        <div class="tip-box">
+          <div class="tip-icon">🔒</div>
+          <p><strong>Privacy note:</strong> Your schema is sent to the AI API only at query generation time. Nothing is stored server-side between sessions. Refresh the page to clear all data.</p>
+        </div>
+      </div>
+
+      <!-- WRITING QUERIES -->
+      <div class="guide-section" id="gs-queries">
+        <div class="guide-section-title">How to write effective natural language queries</div>
+        <div class="step-list">
+          <div class="step-card">
+            <div class="step-num">→</div>
+            <div class="step-content">
+              <h4>Be specific about what you want to see <span class="step-tag basic">BASIC</span></h4>
+              <p>Instead of <em>"get users"</em>, try <em>"get the name and email of all users who signed up in the last 30 days."</em> The more detail you give, the more precise the query.</p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-num">→</div>
+            <div class="step-content">
+              <h4>Mention sorting, grouping, and limits <span class="step-tag basic">BASIC</span></h4>
+              <p>Say things like <em>"sorted by total revenue descending"</em>, <em>"grouped by country"</em>, or <em>"show only the top 5 results."</em> These map directly to ORDER BY, GROUP BY, and LIMIT/TOP clauses.</p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-num">→</div>
+            <div class="step-content">
+              <h4>Describe joins in plain terms <span class="step-tag basic">BASIC</span></h4>
+              <p>You can say <em>"show orders with the customer name"</em> or <em>"join users and orders"</em>. The AI figures out the join condition, especially if you've provided a schema. For LEFT JOINs, say <em>"include users even if they have no orders."</em></p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-num">→</div>
+            <div class="step-content">
+              <h4>Use aggregations naturally <span class="step-tag basic">BASIC</span></h4>
+              <p>Phrases like <em>"total sales per customer"</em>, <em>"average order value by month"</em>, or <em>"count of active users"</em> all map to SUM, AVG, and COUNT with GROUP BY.</p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-num">→</div>
+            <div class="step-content">
+              <h4>Ask for CTEs or subqueries <span class="step-tag pro">PRO</span></h4>
+              <p>You can request <em>"write this using a CTE"</em> or <em>"use a subquery to find customers who have spent more than average."</em> The AI will structure the query accordingly.</p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-num">→</div>
+            <div class="step-content">
+              <h4>Window functions <span class="step-tag pro">PRO</span></h4>
+              <p>Try <em>"rank customers by total spend within each region"</em> or <em>"show running total of revenue by date."</em> This triggers RANK(), ROW_NUMBER(), or SUM() OVER() window functions.</p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-num">→</div>
+            <div class="step-content">
+              <h4>Refinement follow-ups <span class="step-tag pro">PRO</span></h4>
+              <p>After a query is generated, send a follow-up like <em>"also filter where status is active"</em>, <em>"remove the LIMIT"</em>, or <em>"add the product name column."</em> The AI builds on the previous query without you repeating everything.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- OUTPUT & TOOLS -->
+      <div class="guide-section" id="gs-output">
+        <div class="guide-section-title">Understanding the output panel</div>
+        <div class="feature-grid">
+          <div class="feature-card">
+            <span class="feat-icon">🖊</span>
+            <h4>SQL Output tab</h4>
+            <p>Displays the generated query with full syntax highlighting — keywords in blue, strings in green, numbers in amber, functions in purple.</p>
+          </div>
+          <div class="feature-card">
+            <span class="feat-icon">⊞</span>
+            <h4>Breakdown tab</h4>
+            <p>Each SQL clause (SELECT, FROM, WHERE, JOIN, GROUP BY, etc.) is listed separately with a plain-English description of what it does.</p>
+          </div>
+          <div class="feature-card">
+            <span class="feat-icon">◷</span>
+            <h4>History tab</h4>
+            <p>Every query you generate this session is saved here. Click any history item to reload that query. Useful for comparing results.</p>
+          </div>
+          <div class="feature-card">
+            <span class="feat-icon">📋</span>
+            <h4>Copy to clipboard</h4>
+            <p>The COPY button in the SQL Output header copies the raw, unformatted SQL to your clipboard — ready to paste into your database client.</p>
+          </div>
+          <div class="feature-card">
+            <span class="feat-icon">⬇</span>
+            <h4>Download as .sql</h4>
+            <p>The DOWNLOAD button saves the query as a <code style="font-family:var(--mono);font-size:12px">.sql</code> file to your computer. Useful for sharing or version controlling your queries.</p>
+          </div>
+          <div class="feature-card">
+            <span class="feat-icon">⚠</span>
+            <h4>Warnings</h4>
+            <p>Yellow warning boxes appear when the AI made assumptions — e.g. if "recent" was interpreted as "last 30 days." Review them to fine-tune your query.</p>
+          </div>
+        </div>
+        <hr class="guide-divider">
+        <div class="guide-section-title">Explanation block</div>
+        <p style="font-size:13px;color:var(--text2);line-height:1.6;">Below every generated SQL block, a plain-English explanation tells you exactly what the query does — what data it returns, how the filtering works, and any joins involved. This is useful for sharing queries with non-technical teammates.</p>
+      </div>
+
+      <!-- PRO TIPS -->
+      <div class="guide-section" id="gs-pro">
+        <div class="guide-section-title">Advanced techniques</div>
+        <div class="step-list">
+          <div class="step-card">
+            <div class="step-num" style="background:rgba(199,146,234,0.1);border-color:rgba(199,146,234,0.2);color:var(--func)">★</div>
+            <div class="step-content">
+              <h4>Multi-table schemas give the best results <span class="step-tag pro">PRO</span></h4>
+              <p>Paste all related tables at once. The AI maps foreign keys automatically. For example, pasting <code style="font-family:var(--mono);color:var(--string);font-size:12px">users</code>, <code style="font-family:var(--mono);color:var(--string);font-size:12px">orders</code>, and <code style="font-family:var(--mono);color:var(--string);font-size:12px">products</code> lets it write accurate three-table join queries.</p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-num" style="background:rgba(199,146,234,0.1);border-color:rgba(199,146,234,0.2);color:var(--func)">★</div>
+            <div class="step-content">
+              <h4>Request specific output formats <span class="step-tag pro">PRO</span></h4>
+              <p>Ask for <em>"write this as a view"</em>, <em>"make this a stored procedure"</em>, or <em>"wrap it in a transaction."</em> The AI will produce the correct DDL or DML wrapper for your target dialect.</p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-num" style="background:rgba(199,146,234,0.1);border-color:rgba(199,146,234,0.2);color:var(--func)">★</div>
+            <div class="step-content">
+              <h4>Ask for performance hints <span class="step-tag pro">PRO</span></h4>
+              <p>After generating, say <em>"what indexes would help this query?"</em> or <em>"is there a more efficient way to write this?"</em> The AI will suggest optimizations in the conversation.</p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-num" style="background:rgba(199,146,234,0.1);border-color:rgba(199,146,234,0.2);color:var(--func)">★</div>
+            <div class="step-content">
+              <h4>Quick Example chips <span class="step-tag tip">TIP</span></h4>
+              <p>Click any chip in the Quick Examples section to pre-fill the input with a real-world query pattern. This is the fastest way to explore the tool's capabilities — modify the pre-filled text to fit your schema.</p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-num" style="background:rgba(199,146,234,0.1);border-color:rgba(199,146,234,0.2);color:var(--func)">★</div>
+            <div class="step-content">
+              <h4>Destructive queries — INSERT, UPDATE, DELETE <span class="step-tag tip">TIP</span></h4>
+              <p>The AI will generate INSERT, UPDATE, and DELETE queries when asked. For destructive operations, it always adds a warning so you can review before running. Always test on non-production data first.</p>
+            </div>
+          </div>
+        </div>
+        <div class="tip-box">
+          <div class="tip-icon">🚀</div>
+          <p><strong>Power user flow:</strong> Paste schema → generate a base SELECT → use follow-ups to add filters, joins, and aggregations → switch to Breakdown tab to review each clause → copy and run. This iterative approach produces production-ready queries in under 2 minutes.</p>
+        </div>
+      </div>
+
+      <!-- SHORTCUTS -->
+      <div class="guide-section" id="gs-shortcuts">
+        <div class="guide-section-title">Keyboard & interaction shortcuts</div>
+        <table class="shortcut-table">
+          <tr><td>Enter</td><td>Submit the current query (generate SQL)</td></tr>
+          <tr><td>Shift + Enter</td><td>Add a new line in the input box without submitting</td></tr>
+          <tr><td>Click example chip</td><td>Pre-fill the input with that query pattern</td></tr>
+          <tr><td>Click dialect button</td><td>Switch the target SQL dialect instantly</td></tr>
+          <tr><td>Schema toggle</td><td>Show/hide the schema input area</td></tr>
+          <tr><td>COPY button</td><td>Copy raw SQL to clipboard</td></tr>
+          <tr><td>DOWNLOAD button</td><td>Save query as a .sql file</td></tr>
+          <tr><td>History tab → click item</td><td>Reload a previous query's SQL</td></tr>
+          <tr><td>Breakdown tab</td><td>See each SQL clause explained separately</td></tr>
+          <tr><td>? icon (header)</td><td>Open this user manual</td></tr>
+          <tr><td>✕ or click outside</td><td>Close this manual</td></tr>
+        </table>
+        <hr class="guide-divider">
+        <div class="guide-section-title">Phrase reference</div>
+        <table class="shortcut-table">
+          <tr><td>"top 10 / limit to 5"</td><td>Adds LIMIT / TOP / FETCH FIRST clause</td></tr>
+          <tr><td>"sorted by X descending"</td><td>Adds ORDER BY X DESC</td></tr>
+          <tr><td>"grouped by X"</td><td>Adds GROUP BY X</td></tr>
+          <tr><td>"where X is Y"</td><td>Adds WHERE condition</td></tr>
+          <tr><td>"join with / include Y"</td><td>Adds JOIN clause</td></tr>
+          <tr><td>"total / sum / count of"</td><td>Adds SUM() / COUNT() aggregate</td></tr>
+          <tr><td>"last 30 days / this month"</td><td>Adds date range filter</td></tr>
+          <tr><td>"as a CTE / using WITH"</td><td>Wraps in a Common Table Expression</td></tr>
+          <tr><td>"rank by / row number"</td><td>Adds window function RANK() / ROW_NUMBER()</td></tr>
+          <tr><td>"running total"</td><td>Adds SUM() OVER() window function</td></tr>
+        </table>
+      </div>
+
+    </div><!-- end guide-body -->
+  </div><!-- end guide-modal -->
+</div><!-- end guide-overlay -->
+
+<main>
+  <!-- Left Panel: Input -->
+  <div class="left-panel">
+    <div class="section-header">
+      <span class="section-title">Configuration</span>
+    </div>
+    <div class="query-area">
+
+      <!-- Dialect -->
+      <div>
+        <div style="font-size:11px;font-family:var(--mono);color:var(--text2);letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">Dialect</div>
+        <div class="dialect-row" id="dialectRow">
+          <button class="dialect-btn active" data-d="PostgreSQL">PostgreSQL</button>
+          <button class="dialect-btn" data-d="MySQL">MySQL</button>
+          <button class="dialect-btn" data-d="SQLite">SQLite</button>
+          <button class="dialect-btn" data-d="SQL Server">SQL Server</button>
+          <button class="dialect-btn" data-d="Microsoft SQL Server">MSSQL</button>
+          <button class="dialect-btn" data-d="Oracle">Oracle</button>
+        </div>
+      </div>
+
+      <!-- Schema -->
+      <div>
+        <div class="schema-toggle">
+          <input type="checkbox" id="schemaToggle">
+          <label for="schemaToggle" style="font-size:11px;font-family:var(--mono);color:var(--text2);letter-spacing:1px;text-transform:uppercase;">Schema Context</label>
+        </div>
+        <div class="schema-box" id="schemaBox" style="margin-top:10px;">
+          <textarea id="schemaInput" placeholder="Paste your schema here, e.g.:&#10;&#10;CREATE TABLE users (&#10;  id INT PRIMARY KEY,&#10;  name VARCHAR(100),&#10;  email VARCHAR(200),&#10;  created_at TIMESTAMP&#10;);&#10;&#10;CREATE TABLE orders (&#10;  id INT PRIMARY KEY,&#10;  user_id INT,&#10;  total DECIMAL(10,2),&#10;  status VARCHAR(20)&#10;);" rows="8"></textarea>
+        </div>
+      </div>
+
+      <!-- Examples -->
+      <div>
+        <div style="font-size:11px;font-family:var(--mono);color:var(--text2);letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">Quick Examples</div>
+        <div class="examples-row">
+          <button class="example-chip" onclick="setExample(this)">Top 10 users by orders</button>
+          <button class="example-chip" onclick="setExample(this)">Monthly revenue last 6 months</button>
+          <button class="example-chip" onclick="setExample(this)">Inactive users in 30 days</button>
+          <button class="example-chip" onclick="setExample(this)">Products with low stock</button>
+          <button class="example-chip" onclick="setExample(this)">Orders joined with customers</button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Chat / Message history -->
+    <div class="section-header">
+      <span class="section-title">Conversation</span>
+    </div>
+    <div class="chat-area" id="chatArea">
+      <div class="chat-bubble system">
+        Hey! Describe what data you need in plain English — I'll generate the SQL for you. You can also refine it with follow-up messages.
+      </div>
+    </div>
+
+    <!-- Input bar -->
+    <div class="input-bar">
+      <div class="input-wrapper">
+        <textarea class="nl-input" id="nlInput" placeholder="e.g. Show me all orders placed last month where total is over 500..." rows="1"></textarea>
+      </div>
+      <button class="generate-btn" id="generateBtn" onclick="generate()">RUN →</button>
+    </div>
+  </div>
+
+  <!-- Right Panel: Output -->
+  <div class="right-panel">
+    <div class="output-tabs">
+      <div class="tab active" onclick="switchTab('sql', this)">SQL Output</div>
+      <div class="tab" onclick="switchTab('breakdown', this)">Breakdown</div>
+      <div class="tab" onclick="switchTab('history', this)">History</div>
+    </div>
+
+    <!-- SQL Output Tab -->
+    <div class="output-area visible" id="tab-sql">
+      <div class="sql-output-wrap" id="sqlOutputWrap">
+        <div class="empty-state" id="emptyState">
+          <div class="empty-icon">{ }</div>
+          <p>Your generated SQL will appear here.<br>Type a query in plain English to get started.</p>
+          <div class="hint">Tip: add your schema for more accurate results</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Breakdown Tab -->
+    <div class="output-area" id="tab-breakdown">
+      <div class="breakdown-area" id="breakdownArea">
+        <div class="empty-state">
+          <div class="empty-icon">⊞</div>
+          <p>Clause-by-clause breakdown will appear here.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- History Tab -->
+    <div class="output-area" id="tab-history">
+      <div class="history-area" id="historyArea">
+        <div class="empty-state">
+          <div class="empty-icon">◷</div>
+          <p>Your query history will appear here.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  let selectedDialect = 'PostgreSQL';
+  let history = [];
+  let lastSQL = '';
+  let lastBreakdown = [];
+  let conversationHistory = [];
+  let isLoading = false;
+
+  // Guide modal
+  function openGuide() {
+    document.getElementById('guideOverlay').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeGuide() {
+    document.getElementById('guideOverlay').classList.remove('open');
+    document.body.style.overflow = '';
+  }
+  function closeGuideOnBg(e) {
+    if (e.target === document.getElementById('guideOverlay')) closeGuide();
+  }
+  function switchGuideTab(name, el) {
+    document.querySelectorAll('.guide-tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    document.querySelectorAll('.guide-section').forEach(s => s.classList.remove('active'));
+    document.getElementById('gs-' + name).classList.add('active');
+  }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeGuide(); });
+
+  // Dialect selection
+  document.getElementById('dialectRow').addEventListener('click', e => {
+    if (!e.target.classList.contains('dialect-btn')) return;
+    document.querySelectorAll('.dialect-btn').forEach(b => b.classList.remove('active'));
+    e.target.classList.add('active');
+    selectedDialect = e.target.dataset.d;
+  });
+
+  // Schema toggle
+  document.getElementById('schemaToggle').addEventListener('change', e => {
+    document.getElementById('schemaBox').classList.toggle('visible', e.target.checked);
+  });
+
+  // Auto-resize textarea
+  const nlInput = document.getElementById('nlInput');
+  nlInput.addEventListener('input', () => {
+    nlInput.style.height = 'auto';
+    nlInput.style.height = Math.min(nlInput.scrollHeight, 120) + 'px';
+  });
+
+  nlInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      generate();
+    }
+  });
+
+  function setExample(el) {
+    nlInput.value = el.textContent;
+    nlInput.style.height = 'auto';
+    nlInput.style.height = Math.min(nlInput.scrollHeight, 120) + 'px';
+    nlInput.focus();
+  }
+
+  function switchTab(name, el) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    document.querySelectorAll('.output-area').forEach(a => a.classList.remove('visible'));
+    document.getElementById('tab-' + name).classList.add('visible');
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.display = 'block';
+    setTimeout(() => { t.style.display = 'none'; }, 2500);
+  }
+
+  function addChatBubble(text, type) {
+    const area = document.getElementById('chatArea');
+    const div = document.createElement('div');
+    div.className = `chat-bubble ${type}`;
+    div.textContent = text;
+    area.appendChild(div);
+    area.scrollTop = area.scrollHeight;
+  }
+
+  function highlightSQL(sql) {
+    const keywords = ['SELECT','FROM','WHERE','JOIN','LEFT','RIGHT','INNER','OUTER','FULL','ON','AND','OR','NOT','IN','LIKE','BETWEEN','IS','NULL','ORDER','BY','GROUP','HAVING','LIMIT','OFFSET','DISTINCT','AS','INSERT','INTO','VALUES','UPDATE','SET','DELETE','CREATE','TABLE','DROP','ALTER','ADD','COLUMN','INDEX','PRIMARY','KEY','FOREIGN','REFERENCES','UNION','ALL','EXISTS','CASE','WHEN','THEN','ELSE','END','COUNT','SUM','AVG','MAX','MIN','COALESCE','NULLIF','CAST','DATE','NOW','CURRENT_DATE','INTERVAL','WITH','OVER','PARTITION','RANK','ROW_NUMBER'];
+
+    // Step 1: extract string literals and comments before any escaping,
+    // replace them with placeholders so they are never re-processed.
+    const placeholders = [];
+    function stash(val) {
+      const id = '\x00' + placeholders.length + '\x00';
+      placeholders.push(val);
+      return id;
+    }
+
+    // stash single-quoted strings
+    let out = sql.replace(/'(?:[^'\\]|\\.)*'/g, m =>
+      stash('<span class="str">' + m.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span>')
+    );
+
+    // stash -- comments
+    out = out.replace(/--[^\n]*/g, m =>
+      stash('<span class="cm">' + m.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span>')
+    );
+
+    // Step 2: escape remaining HTML chars
+    out = out.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+    // Step 3: numbers
+    out = out.replace(/\b(\d+\.?\d*)\b/g, '<span class="num">$1</span>');
+
+    // Step 4: keywords (word boundary, case-sensitive uppercase)
+    const kwRegex = new RegExp('\\b(' + keywords.join('|') + ')\\b', 'g');
+    out = out.replace(kwRegex, '<span class="kw">$1</span>');
+
+    // Step 5: functions (word followed by open paren, not already inside a span)
+    out = out.replace(/\b([a-zA-Z_][a-zA-Z0-9_]*)(?=\s*\()/g, '<span class="fn">$1</span>');
+
+    // Step 6: operators (=, !=, >=, <=, <>, *, +, -)
+    // avoid wrapping * inside COUNT(*) — only standalone * or in SELECT *
+    out = out.replace(/\b(!=|<>|>=|<=|[=<>])\b/g, m => '<span class="op">' + m + '</span>');
+
+    // Step 7: restore placeholders
+    out = out.replace(/\x00(\d+)\x00/g, (_, i) => placeholders[+i]);
+
+    return out;
+  }
+
+  async function generate() {
+    const input = nlInput.value.trim();
+    if (!input || isLoading) return;
+
+    const schema = document.getElementById('schemaToggle').checked
+      ? document.getElementById('schemaInput').value.trim()
+      : '';
+
+    isLoading = true;
+    document.getElementById('generateBtn').disabled = true;
+    document.getElementById('generateBtn').textContent = '...';
+
+    addChatBubble(input, 'user');
+    nlInput.value = '';
+    nlInput.style.height = 'auto';
+
+    // Add to conversation history
+    conversationHistory.push({ role: 'user', content: input });
+
+    // Build system prompt
+    const systemPrompt = `You are an expert SQL generator. Convert natural language to accurate, well-formatted SQL queries.
+
+Dialect: ${selectedDialect}
+${schema ? `Schema:\n${schema}` : 'No schema provided — use sensible table/column names based on context.'}
+
+Return ONLY valid JSON in this exact format (no markdown, no explanation outside JSON):
+{
+  "sql": "The complete SQL query, formatted with newlines and proper indentation",
+  "explanation": "A brief plain-English explanation of what this query does (2-3 sentences)",
+  "breakdown": [
+    { "clause": "SELECT", "code": "column1, column2", "desc": "What is being selected" },
+    { "clause": "FROM", "code": "table_name", "desc": "Source table" }
+  ],
+  "dialect": "${selectedDialect}",
+  "warning": "Optional: any warning about assumptions made or ambiguities"
+}
+
+Clause types: SELECT, FROM, WHERE, JOIN, GROUP, ORDER, LIMIT
+Format the SQL query with each major clause on its own line.
+CRITICAL: The "sql" field must contain ONLY raw SQL text — no HTML tags, no <span>, no markdown, no backticks. Plain SQL only.`;
+
+    // Show loading in output
+    const wrap = document.getElementById('sqlOutputWrap');
+    const emptyState = document.getElementById('emptyState');
+    if (emptyState) emptyState.remove();
+
+    const loadingEl = document.createElement('div');
+    loadingEl.className = 'loading-state';
+    loadingEl.id = 'loadingEl';
+    loadingEl.innerHTML = `<div class="spinner"></div><span>Generating ${selectedDialect} query...</span>`;
+    wrap.appendChild(loadingEl);
+
+    try {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': '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',
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1500,
+          system: systemPrompt,
+          messages: conversationHistory
+        })
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error('API error ' + response.status + ': ' + errText.slice(0, 120));
+      }
+
+      const data = await response.json();
+      const raw = (data.content || []).map(c => c.text || '').join('');
+
+      if (!raw) throw new Error('Empty response from API. Please try again.');
+
+      let parsed;
+      try {
+        const jsonMatch = raw.replace(/```json|```/g, '').trim().match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error('No JSON found');
+        parsed = JSON.parse(jsonMatch[0]);
+      } catch {
+        throw new Error('Could not parse the AI response. Try rephrasing your query.');
+      }
+
+      // Store result — strip any HTML tags the model may have hallucinated
+      const stripHTML = s => s ? s.replace(/<[^>]*>/g, '').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&').replace(/&quot;/g,'"') : s;
+      lastSQL = stripHTML(parsed.sql);
+      lastBreakdown = parsed.breakdown || [];
+      conversationHistory.push({ role: 'assistant', content: raw });
+
+      // Remove loading
+      document.getElementById('loadingEl')?.remove();
+
+      // Render SQL block
+      const block = document.createElement('div');
+      block.className = 'sql-block';
+      block.innerHTML = `
+        <div class="sql-block-header">
+          <div class="sql-block-label">
+            <div class="sql-dot"></div>
+            ${parsed.dialect} QUERY
+          </div>
+          <div class="sql-actions">
+            <button class="icon-btn" onclick="copySQL()">COPY</button>
+            <button class="icon-btn" onclick="downloadSQL()">DOWNLOAD</button>
+          </div>
+        </div>
+        <pre class="sql-code">${highlightSQL(parsed.sql)}</pre>
+      `;
+      wrap.appendChild(block);
+
+      if (parsed.explanation) {
+        const expBlock = document.createElement('div');
+        expBlock.className = 'explanation-block';
+        expBlock.innerHTML = `<h4>What this query does</h4>${parsed.explanation}`;
+        if (parsed.warning) {
+          expBlock.innerHTML += `<div style="margin-top:10px;padding:10px;border-radius:6px;border:1px solid rgba(255,179,71,0.2);background:rgba(255,179,71,0.05);font-size:12px;color:var(--warn);font-family:var(--mono);">⚠ ${parsed.warning}</div>`;
+        }
+        wrap.appendChild(expBlock);
+      }
+
+      wrap.scrollTop = wrap.scrollHeight;
+
+      // Breakdown tab
+      renderBreakdown(parsed.breakdown || []);
+
+      // History
+      history.unshift({ nl: input, dialect: parsed.dialect, ts: new Date().toLocaleTimeString(), sql: parsed.sql });
+      renderHistory();
+
+      // Chat confirmation
+      addChatBubble(`✓ Generated ${parsed.dialect} query. ${parsed.warning ? 'Note: ' + parsed.warning : 'You can ask me to refine it!'}`, 'system');
+
+    } catch (err) {
+      document.getElementById('loadingEl')?.remove();
+      const msg = err.message || 'Unknown error';
+      const friendly = msg.includes('fetch') 
+        ? 'Network error — could not reach the API. If you are running this file locally, open it via a server or use the claude.ai artifact viewer.'
+        : msg;
+      addChatBubble('⚠ ' + friendly, 'system');
+      const errBlock = document.createElement('div');
+      errBlock.style.cssText = 'padding:16px;color:var(--error);font-size:13px;font-family:var(--mono);border:1px solid rgba(255,95,109,0.2);border-radius:var(--radius);background:rgba(255,95,109,0.05);line-height:1.6;';
+      errBlock.innerHTML = '<strong>⚠ Error:</strong> ' + friendly + '<br><span style="font-size:11px;color:var(--text3);margin-top:6px;display:block;">Tip: This app works best when opened inside the claude.ai artifact viewer, not as a standalone local file.</span>';
+      wrap.appendChild(errBlock);
+    }
+
+    isLoading = false;
+    document.getElementById('generateBtn').disabled = false;
+    document.getElementById('generateBtn').textContent = 'RUN →';
+  }
+
+  function renderBreakdown(breakdown) {
+    const area = document.getElementById('breakdownArea');
+    area.innerHTML = '';
+
+    if (!breakdown.length) {
+      area.innerHTML = '<div class="empty-state"><div class="empty-icon">⊞</div><p>No breakdown available.</p></div>';
+      return;
+    }
+
+    breakdown.forEach(item => {
+      const el = document.createElement('div');
+      el.className = 'clause-item';
+      const tagClass = item.clause.toLowerCase().replace(' ', '');
+      el.innerHTML = `
+        <div class="clause-tag ${tagClass}">${item.clause}</div>
+        <div class="clause-content">
+          <div class="clause-label">${item.code}</div>
+          <div class="clause-desc">${item.desc}</div>
+        </div>
+      `;
+      area.appendChild(el);
+    });
+  }
+
+  function renderHistory() {
+    const area = document.getElementById('historyArea');
+    area.innerHTML = '';
+
+    if (!history.length) {
+      area.innerHTML = '<div class="empty-state"><div class="empty-icon">◷</div><p>No history yet.</p></div>';
+      return;
+    }
+
+    history.forEach((item, i) => {
+      const el = document.createElement('div');
+      el.className = 'history-item' + (item.saved ? ' saved' : '');
+      el.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <div class="history-nl" style="margin:0;flex:1">${item.nl}</div>
+          ${item.saved ? '<span class="history-saved-badge">CLOUD</span>' : ''}
+        </div>
+        <div class="history-meta">
+          <span class="history-dialect">${item.dialect}</span>
+          <span>${item.date || ''} ${item.ts}</span>
+        </div>
+      `;
+      el.onclick = () => {
+        lastSQL = item.sql;
+        // Show the SQL in the output panel
+        const wrap = document.getElementById('sqlOutputWrap');
+        const emptyState = document.getElementById('emptyState');
+        if (emptyState) emptyState.remove();
+        const block = document.createElement('div');
+        block.className = 'sql-block';
+        block.innerHTML = '<div class="sql-block-header"><div class="sql-block-label"><div class="sql-dot"></div>' + item.dialect + ' QUERY (from history)</div><div class="sql-actions"><button class="icon-btn" onclick="copySQL()">COPY</button><button class="icon-btn" onclick="downloadSQL()">DOWNLOAD</button></div></div><pre class="sql-code">' + highlightSQL(item.sql) + '</pre>';
+        wrap.appendChild(block);
+        if (item.explanation) {
+          const expBlock = document.createElement('div');
+          expBlock.className = 'explanation-block';
+          expBlock.innerHTML = '<h4>What this query does</h4>' + item.explanation;
+          wrap.appendChild(expBlock);
+        }
+        wrap.scrollTop = wrap.scrollHeight;
+        switchTab('sql', document.querySelector('.tab'));
+        showToast('✓ Loaded from history');
+      };
+      area.appendChild(el);
+    });
+  }
+
+  function copySQL() {
+    if (!lastSQL) { showToast('No query to copy yet.'); return; }
+    // Modern clipboard API with textarea fallback
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(lastSQL)
+        .then(() => showToast('✓ Copied to clipboard!'))
+        .catch(() => fallbackCopy(lastSQL));
+    } else {
+      fallbackCopy(lastSQL);
+    }
+  }
+
+  function fallbackCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try {
+      document.execCommand('copy');
+      showToast('✓ Copied to clipboard!');
+    } catch {
+      showToast('Copy failed — please select and copy manually.');
+    }
+    document.body.removeChild(ta);
+  }
+
+  function downloadSQL() {
+    if (!lastSQL) { showToast('No query to download yet.'); return; }
+    try {
+      const blob = new Blob([lastSQL], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'query.sql';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      showToast('✓ Downloaded as query.sql');
+    } catch(e) {
+      showToast('Download failed: ' + e.message);
+    }
+  }
+
+</script>
+</body>
+</html>
