@@ -1712,16 +1712,13 @@ CREATE TABLE orders (
 Dialect: ${selectedDialect}
 ${schema ? `Schema:\n${schema}` : 'No schema provided — use sensible table/column names based on context.'}
 
-Output ONLY a single JSON object. No text before it, no text after it, no markdown, no code fences.
+Output ONLY a raw JSON object. No markdown, no code fences, no explanation.
+Start your response with { and end with }.
 
-Output exactly this structure:
-{"sql":"SELECT ...","explanation":"1-2 sentence description.","breakdown":[{"clause":"SELECT","code":"columns","desc":"what is selected"},{"clause":"FROM","code":"table","desc":"source"}],"dialect":"${selectedDialect}","warning":""}
+Format:
+{"sql":"SELECT ...","explanation":"brief description","breakdown":[{"clause":"SELECT","code":"*","desc":"all columns"}],"dialect":"DIALECT_HERE","warning":""}
 
-STRICT RULES:
-- Start your entire response with { and end with }
-- sql field: plain SQL only, no HTML, no backticks, no markdown
-- Do not write anything outside the JSON object
-- Use \n for newlines inside sql string`;
+Rules: sql must be plain SQL only. No HTML. No backticks. Nothing outside the JSON.;
 
     // Show loading in output
     const wrap = document.getElementById('sqlOutputWrap');
@@ -1735,47 +1732,53 @@ STRICT RULES:
     wrap.appendChild(loadingEl);
 
     try {
-      const response = await fetch('https://script.google.com/macros/s/AKfycbxWqynTph7XQHDc_xZBTAvudJPp2btihtZ329vrKQnC0kXHc1cTdpRhU-39ouMNKilHNw/exec', {
+      // Build request payload
+      const payload = {
+        model: 'llama-3.3-70b-versatile',
+        max_tokens: 1500,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          ...conversationHistory
+        ]
+      };
+
+      // Use corsproxy.io to bypass CORS
+      const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent('https://api.groq.com/openai/v1/chat/completions');
+      
+      const response = await fetch(proxyUrl, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer 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',
+          'x-requested-with': 'XMLHttpRequest'
         },
-        body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
-          max_tokens: 1500,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            ...conversationHistory
-          ]
-        })
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
         const errText = await response.text();
-        throw new Error('API error ' + response.status + ': ' + errText.slice(0, 120));
+        throw new Error('API error ' + response.status + ': ' + errText.slice(0, 200));
       }
 
       const data = await response.json();
       const raw = data.choices?.[0]?.message?.content || '';
-      // Debug log in case of issues
-      if (!raw) console.warn('Empty response from proxy:', JSON.stringify(data).slice(0,200));
 
-      if (!raw) throw new Error('Empty response from API. Please try again.');
+      if (!raw) throw new Error('Empty response. Please try again.');
 
       let parsed;
       try {
         let cleaned = raw.replace(/```json/g,'').replace(/```/g,'').trim();
         const start = cleaned.indexOf('{');
         const end = cleaned.lastIndexOf('}');
-        if (start === -1 || end === -1) throw new Error('No JSON found in response');
+        if (start === -1 || end === -1) throw new Error('No JSON in response');
         cleaned = cleaned.slice(start, end + 1);
         parsed = JSON.parse(cleaned);
-        if (!parsed.sql) throw new Error('No SQL field in response');
+        if (!parsed.sql) throw new Error('No SQL field');
         parsed.dialect = parsed.dialect || selectedDialect;
         parsed.breakdown = parsed.breakdown || [];
         parsed.explanation = parsed.explanation || '';
-      } catch(parseErr) {
-        throw new Error('Could not parse the AI response: ' + parseErr.message);
+      } catch(pe) {
+        throw new Error('Parse error: ' + pe.message + ' | Raw: ' + raw.slice(0,100));
       }
 
       // Store result — strip any HTML tags the model may have hallucinated
@@ -1831,12 +1834,12 @@ STRICT RULES:
       document.getElementById('loadingEl')?.remove();
       const msg = err.message || 'Unknown error';
       const friendly = msg.includes('fetch') 
-        ? 'Network error — could not reach the API. If you are running this file locally, open it via a server or use the claude.ai artifact viewer.'
+        ? 'Network error — could not connect. Please check your internet connection and try again.'
         : msg;
       addChatBubble('⚠ ' + friendly, 'system');
       const errBlock = document.createElement('div');
       errBlock.style.cssText = 'padding:16px;color:var(--error);font-size:13px;font-family:var(--mono);border:1px solid rgba(255,95,109,0.2);border-radius:var(--radius);background:rgba(255,95,109,0.05);line-height:1.6;';
-      errBlock.innerHTML = '<strong>⚠ Error:</strong> ' + friendly + '<br><span style="font-size:11px;color:var(--text3);margin-top:6px;display:block;">Tip: This app works best when opened inside the claude.ai artifact viewer, not as a standalone local file.</span>';
+      errBlock.innerHTML = '<strong>⚠ Error:</strong> ' + friendly + '<br><span style="font-size:11px;color:var(--text3);margin-top:6px;display:block;">Tip: If this keeps failing, try refreshing the page.</span>';
       wrap.appendChild(errBlock);
     }
 
