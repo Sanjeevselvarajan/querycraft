@@ -1692,8 +1692,7 @@ CREATE TABLE orders (
     if (!input || isLoading) return;
 
     const schema = document.getElementById('schemaToggle').checked
-      ? document.getElementById('schemaInput').value.trim()
-      : '';
+      ? document.getElementById('schemaInput').value.trim() : '';
 
     isLoading = true;
     document.getElementById('generateBtn').disabled = true;
@@ -1703,24 +1702,15 @@ CREATE TABLE orders (
     nlInput.value = '';
     nlInput.style.height = 'auto';
 
-    // Add to conversation history
     conversationHistory.push({ role: 'user', content: input });
 
-    // Build system prompt
-    const systemPrompt = `You are an expert SQL generator. Convert natural language to accurate, well-formatted SQL queries.
-
+    const systemPrompt = `You are a SQL expert. Output ONLY a JSON object, nothing else.
 Dialect: ${selectedDialect}
-${schema ? `Schema:\n${schema}` : 'No schema provided — use sensible table/column names based on context.'}
+${schema ? 'Schema:\n' + schema : 'No schema — infer table names from context.'}
+JSON format (output this exactly, no extra text):
+{"sql":"SELECT ...","explanation":"brief description","breakdown":[{"clause":"SELECT","code":"*","desc":"all columns"},{"clause":"FROM","code":"table_name","desc":"source table"}],"dialect":"${selectedDialect}","warning":""}
+Rules: Start with { end with }. sql = plain SQL only. No markdown. No backticks.`;
 
-Output ONLY a raw JSON object. No markdown, no code fences, no explanation.
-Start your response with { and end with }.
-
-Format:
-{"sql":"SELECT ...","explanation":"brief description","breakdown":[{"clause":"SELECT","code":"*","desc":"all columns"}],"dialect":"DIALECT_HERE","warning":""}
-
-Rules: sql must be plain SQL only. No HTML. No backticks. Nothing outside the JSON.;
-
-    // Show loading in output
     const wrap = document.getElementById('sqlOutputWrap');
     const emptyState = document.getElementById('emptyState');
     if (emptyState) emptyState.remove();
@@ -1728,11 +1718,10 @@ Rules: sql must be plain SQL only. No HTML. No backticks. Nothing outside the JS
     const loadingEl = document.createElement('div');
     loadingEl.className = 'loading-state';
     loadingEl.id = 'loadingEl';
-    loadingEl.innerHTML = `<div class="spinner"></div><span>Generating ${selectedDialect} query...</span>`;
+    loadingEl.innerHTML = '<div class="spinner"></div><span>Generating ' + selectedDialect + ' query...</span>';
     wrap.appendChild(loadingEl);
 
     try {
-      // Build request payload
       const payload = {
         model: 'llama-3.3-70b-versatile',
         max_tokens: 1500,
@@ -1742,104 +1731,108 @@ Rules: sql must be plain SQL only. No HTML. No backticks. Nothing outside the JS
         ]
       };
 
-      // Use corsproxy.io to bypass CORS
-      const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent('https://api.groq.com/openai/v1/chat/completions');
-      
-      const response = await fetch(proxyUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer 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',
-          'x-requested-with': 'XMLHttpRequest'
+      // Try direct Groq first, then fallback proxies
+      let response, lastError;
+      const endpoints = [
+        { 
+          url: 'https://api.groq.com/openai/v1/chat/completions',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer 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' }
         },
-        body: JSON.stringify(payload)
-      });
+        {
+          url: 'https://corsproxy.io/?' + encodeURIComponent('https://api.groq.com/openai/v1/chat/completions'),
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer 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' }
+        },
+        {
+          url: 'https://proxy.cors.sh/https://api.groq.com/openai/v1/chat/completions',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer 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', 'x-cors-api-key': 'temp_cors_key' }
+        }
+      ];
 
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error('API error ' + response.status + ': ' + errText.slice(0, 200));
+      for (const endpoint of endpoints) {
+        try {
+          response = await fetch(endpoint.url, {
+            method: 'POST',
+            headers: endpoint.headers,
+            body: JSON.stringify(payload)
+          });
+          if (response.ok) break;
+          lastError = 'Status ' + response.status;
+        } catch(e) {
+          lastError = e.message;
+          response = null;
+          continue;
+        }
+      }
+
+      if (!response || !response.ok) {
+        throw new Error('All endpoints failed. Last error: ' + lastError);
       }
 
       const data = await response.json();
       const raw = data.choices?.[0]?.message?.content || '';
-
-      if (!raw) throw new Error('Empty response. Please try again.');
+      if (!raw) throw new Error('Empty response from API.');
 
       let parsed;
       try {
         let cleaned = raw.replace(/```json/g,'').replace(/```/g,'').trim();
         const start = cleaned.indexOf('{');
         const end = cleaned.lastIndexOf('}');
-        if (start === -1 || end === -1) throw new Error('No JSON in response');
+        if (start === -1 || end === -1) throw new Error('No JSON found');
         cleaned = cleaned.slice(start, end + 1);
         parsed = JSON.parse(cleaned);
-        if (!parsed.sql) throw new Error('No SQL field');
+        if (!parsed.sql) throw new Error('No SQL in response');
         parsed.dialect = parsed.dialect || selectedDialect;
         parsed.breakdown = parsed.breakdown || [];
         parsed.explanation = parsed.explanation || '';
+        parsed.warning = parsed.warning || '';
       } catch(pe) {
-        throw new Error('Parse error: ' + pe.message + ' | Raw: ' + raw.slice(0,100));
+        throw new Error('Parse error: ' + pe.message);
       }
 
-      // Store result — strip any HTML tags the model may have hallucinated
-      const stripHTML = s => s ? s.replace(/<[^>]*>/g, '').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&').replace(/&quot;/g,'"') : s;
+      const stripHTML = s => s ? s.replace(/<[^>]*>/g,'').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&') : s;
       lastSQL = stripHTML(parsed.sql);
-      lastBreakdown = parsed.breakdown || [];
+      lastBreakdown = parsed.breakdown;
       conversationHistory.push({ role: 'assistant', content: raw });
 
-      // Remove loading
       document.getElementById('loadingEl')?.remove();
 
-      // Render SQL block
       const block = document.createElement('div');
       block.className = 'sql-block';
-      block.innerHTML = `
-        <div class="sql-block-header">
-          <div class="sql-block-label">
-            <div class="sql-dot"></div>
-            ${parsed.dialect} QUERY
-          </div>
-          <div class="sql-actions">
-            <button class="icon-btn" onclick="copySQL()">COPY</button>
-            <button class="icon-btn" onclick="downloadSQL()">DOWNLOAD</button>
-          </div>
-        </div>
-        <pre class="sql-code">${highlightSQL(parsed.sql)}</pre>
-      `;
+      block.innerHTML =
+        '<div class="sql-block-header">' +
+          '<div class="sql-block-label"><div class="sql-dot"></div>' + parsed.dialect + ' QUERY</div>' +
+          '<div class="sql-actions">' +
+            '<button class="icon-btn" onclick="copySQL()">COPY</button>' +
+            '<button class="icon-btn" onclick="downloadSQL()">DOWNLOAD</button>' +
+          '</div>' +
+        '</div>' +
+        '<pre class="sql-code">' + highlightSQL(lastSQL) + '</pre>';
       wrap.appendChild(block);
 
       if (parsed.explanation) {
         const expBlock = document.createElement('div');
         expBlock.className = 'explanation-block';
-        expBlock.innerHTML = `<h4>What this query does</h4>${parsed.explanation}`;
+        expBlock.innerHTML = '<h4>What this query does</h4>' + parsed.explanation;
         if (parsed.warning) {
-          expBlock.innerHTML += `<div style="margin-top:10px;padding:10px;border-radius:6px;border:1px solid rgba(255,179,71,0.2);background:rgba(255,179,71,0.05);font-size:12px;color:var(--warn);font-family:var(--mono);">⚠ ${parsed.warning}</div>`;
+          expBlock.innerHTML += '<div style="margin-top:10px;padding:10px;border-radius:6px;border:1px solid rgba(255,179,71,0.2);background:rgba(255,179,71,0.05);font-size:12px;color:var(--warn);font-family:var(--mono);">⚠ ' + parsed.warning + '</div>';
         }
         wrap.appendChild(expBlock);
       }
 
       wrap.scrollTop = wrap.scrollHeight;
+      renderBreakdown(parsed.breakdown);
 
-      // Breakdown tab
-      renderBreakdown(parsed.breakdown || []);
-
-      // History
-      history.unshift({ nl: input, dialect: parsed.dialect, ts: new Date().toLocaleTimeString(), sql: parsed.sql });
+      history.unshift({ nl: input, dialect: parsed.dialect, ts: new Date().toLocaleTimeString(), sql: lastSQL });
       renderHistory();
 
-      // Chat confirmation
-      addChatBubble(`✓ Generated ${parsed.dialect} query. ${parsed.warning ? 'Note: ' + parsed.warning : 'You can ask me to refine it!'}`, 'system');
+      addChatBubble('✓ Generated ' + parsed.dialect + ' query.' + (parsed.warning ? ' Note: ' + parsed.warning : ' You can ask me to refine it!'), 'system');
 
     } catch (err) {
       document.getElementById('loadingEl')?.remove();
-      const msg = err.message || 'Unknown error';
-      const friendly = msg.includes('fetch') 
-        ? 'Network error — could not connect. Please check your internet connection and try again.'
-        : msg;
-      addChatBubble('⚠ ' + friendly, 'system');
+      addChatBubble('⚠ ' + err.message, 'system');
       const errBlock = document.createElement('div');
       errBlock.style.cssText = 'padding:16px;color:var(--error);font-size:13px;font-family:var(--mono);border:1px solid rgba(255,95,109,0.2);border-radius:var(--radius);background:rgba(255,95,109,0.05);line-height:1.6;';
-      errBlock.innerHTML = '<strong>⚠ Error:</strong> ' + friendly + '<br><span style="font-size:11px;color:var(--text3);margin-top:6px;display:block;">Tip: If this keeps failing, try refreshing the page.</span>';
+      errBlock.textContent = '⚠ ' + err.message;
       wrap.appendChild(errBlock);
     }
 
@@ -1847,6 +1840,7 @@ Rules: sql must be plain SQL only. No HTML. No backticks. Nothing outside the JS
     document.getElementById('generateBtn').disabled = false;
     document.getElementById('generateBtn').textContent = 'RUN →';
   }
+
 
   function renderBreakdown(breakdown) {
     const area = document.getElementById('breakdownArea');
@@ -1883,17 +1877,13 @@ Rules: sql must be plain SQL only. No HTML. No backticks. Nothing outside the JS
 
     history.forEach((item, i) => {
       const el = document.createElement('div');
-      el.className = 'history-item' + (item.saved ? ' saved' : '');
-      el.innerHTML = `
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-          <div class="history-nl" style="margin:0;flex:1">${item.nl}</div>
-          ${item.saved ? '<span class="history-saved-badge">CLOUD</span>' : ''}
-        </div>
-        <div class="history-meta">
-          <span class="history-dialect">${item.dialect}</span>
-          <span>${item.date || ''} ${item.ts}</span>
-        </div>
-      `;
+      el.className = 'history-item';
+      el.innerHTML =
+        '<div class="history-nl">' + item.nl + '</div>' +
+        '<div class="history-meta">' +
+          '<span class="history-dialect">' + item.dialect + '</span>' +
+          '<span>' + item.ts + '</span>' +
+        '</div>';
       el.onclick = () => {
         lastSQL = item.sql;
         // Show the SQL in the output panel
